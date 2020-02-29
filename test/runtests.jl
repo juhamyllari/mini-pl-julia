@@ -1,6 +1,6 @@
-using JlMiniPL
+using MiniPL
 using Test
 
-@testset "JlMiniPL.jl" begin
-    # Write your own tests here.
+@testset "MiniPL.jl" begin
+    MiniPL.greet()
 end

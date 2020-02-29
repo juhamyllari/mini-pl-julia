@@ -1,4 +1,4 @@
-module JlMiniPL
+module MiniPL
 
 greet() = print("Hello World!")
 

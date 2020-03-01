@@ -13,6 +13,7 @@ export Token, scanInput
   semicolon
   colon
   int_literal
+  assign
   kw_var
   kw_for
   kw_end
@@ -98,6 +99,10 @@ function getOperator(input, next)
   if input[next] == '.'
     input[next+1] != '.' && error("expected two dots")
     return Token(rng, ".."), next+2
+  end
+  if input[next] == ':'
+    input[next+1] == '=' && return Token(assign, ":="), next+2
+    return Token(colon, ":"), next+1
   end
   tokenClass = symbol_to_operator[input[next]]
   return Token(tokenClass, string(input[next])), next+1

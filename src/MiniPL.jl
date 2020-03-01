@@ -11,6 +11,7 @@ export Token, scanInput
   close_paren
   rng
   semicolon
+  colon
   int_literal
   kw_var
   kw_for
@@ -42,7 +43,7 @@ keywords = Dict([
   "string" => kw_string,
   "bool" => kw_bool,
   "assert" => kw_assert])
-operator_initials = ['*', '+', '-', '(', ')', '.', ';'] 
+operator_initials = ['*', '+', '-', '(', ')', '.', ';', ':'] 
 digits = '0':'9'
 operator_to_symbol = Dict(
   times => '*',
@@ -50,9 +51,10 @@ operator_to_symbol = Dict(
   minus => '-',
   open_paren => '(',
   close_paren => ')',
-  semicolon => ';'
+  semicolon => ';',
+  colon => ':'
 )
-symbol_to_operator = Dict([(sym, op) for (op, sym) ∈ operator_to_symbol])
+symbol_to_operator = Dict([(sym => op) for (op, sym) ∈ operator_to_symbol])
 
 struct Token
   type::TokenClass

@@ -15,4 +15,3 @@ const m = MiniPL
  @test tokens[1] isa Token
  @test tokens[2] isa Token
 end
-# @test MiniPL.parse("Hello world")[2] isa Integer

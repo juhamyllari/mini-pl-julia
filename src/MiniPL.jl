@@ -2,18 +2,48 @@ module MiniPL
 
 export Token, scanInput
 
+@enum TokenClass begin
+  ident
+  times
+  plus
+  minus
+  open_paren
+  close_paren
+  rng
+  semicolon
+  int_literal
+  kw_var
+  kw_for
+  kw_end
+  kw_in
+  kw_do
+  kw_read
+  kw_print
+  kw_int
+  kw_string
+  kw_bool
+  kw_assert
+end
+
 whitespace = [' ', '\t', '\n']
 end_of_input_symbol = '$'
 separators = union(whitespace, end_of_input_symbol)
 ident_or_kw_initial = union('a':'z', 'A':'Z')
 ident_or_kw_body = union(ident_or_kw_initial, '0':'9', '_')
-keywords = ["var", "for", "end", "in", "do", "read", "print", "int",
-            "string", "bool", "assert"]
+keywords = Dict([
+  "var" => kw_var, 
+  "for" => kw_for,
+  "end" => kw_end,
+  "in" => kw_in,
+  "do" => kw_do,
+  "read" => kw_read,
+  "print" => kw_print,
+  "int" => kw_int,
+  "string" => kw_string,
+  "bool" => kw_bool,
+  "assert" => kw_assert])
 operator_initials = ['*', '+', '-', '(', ')', '.', ';'] 
 digits = '0':'9'
-
-@enum TokenClass ident keyword times plus minus open_paren close_paren rng semicolon int_literal
-
 operator_to_symbol = Dict(
   times => '*',
   plus => '+',
@@ -58,7 +88,7 @@ function getIdentOrKw(input, next)
   while input[next] ∉ union(separators, operator_initials) next += 1 end
   str = input[initial:next-1]
   # println("getIdentOrKw found string ", str)
-  token = str ∈ keywords ? Token(keyword, str) : Token(ident, str)
+  token = str ∈ keys(keywords) ? Token(keywords[str], str) : Token(ident, str)
   return token, next
 end
 

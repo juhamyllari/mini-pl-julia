@@ -58,14 +58,16 @@ binary_ops = Dict(
   times => '*',
   plus => '+',
   minus => '-',
-  open_paren => '(',
-  close_paren => ')',
-  semicolon => ';',
-  colon => ':',
   equals => '=',
   less_than => '<'
+  )
+syntactic_symbols = Dict(
+  open_paren => '(',
+  close_paren => ')',
+  colon => ':',
+  semicolon => ';'
 )
-operator_to_symbol = union(unary_ops, binary_ops)
+operator_to_symbol = union(unary_ops, binary_ops, syntactic_symbols)
 symbol_to_operator = Dict([(sym => op) for (op, sym) ∈ operator_to_symbol])
 
 struct Token
@@ -98,11 +100,9 @@ function getToken(input, next)
 end
 
 function getIdentOrKw(input, next)
-  # println("getIdentOrKw called with next=$(next)")
   initial = next
   while input[next] ∉ union(delimiters, operator_initials) next += 1 end
   str = input[initial:next-1]
-  # println("getIdentOrKw found string ", str)
   token = str ∈ keys(keywords) ? Token(keywords[str], str) : Token(ident, str)
   return token, next
 end
@@ -131,63 +131,106 @@ function parseInput(input::Array{Token,1})
   nxtype() = input[next].type
 
   function match_term(terminal::TokenClass)
-    does_match = terminal.type == nxtype()
+    println("match_term called with terminal $(terminal), next is $(nxtype())")
+    does_match = terminal == nxtype()
     next += 1
     return does_match
   end
   
   function program()
-    return statement() && match_term(semicolon) && statements()
+    println("this is program, nxtype is ", nxtype())
+    return statement() && match_term(semicolon) && statements() && match_term(eoi)
   end
 
   function statements()
-    nxtype() == eoi && return
+    println("this is statements, nxtype is ", nxtype())
+    nxtype() ∈ [eoi, kw_end] && return true
     return statement() && match_term(semicolon) && statements()
   end
 
   function statement()
+    println("this is statement, nxtype is ", nxtype())
     t = nxtype()
-    t == kw_var && return var_ident() && match_term(colon) && tp() && asg_tail()
+    t == kw_var && return match_term(kw_var) &&
+                          var_ident() &&
+                          match_term(colon) &&
+                          tp() &&
+                          asg_tail()
+    t == ident && return var_ident() &&
+                         match_term(assign) &&
+                         expr()
+    t == kw_for && return match_term(kw_for) &&
+                          var_ident() &&
+                          match_term(kw_in) &&
+                          expr() &&
+                          match_term(rng) &&
+                          expr() &&
+                          match_term(kw_do) &&
+                          statements() &&
+                          match_term(kw_end) &&
+                          match_term(kw_for)
+    t == kw_read && return match_term(kw_read) &&
+                           var_ident()
+    t == kw_print && return match_term(kw_print) &&
+                            expr()
+    t == kw_assert && return match_term(kw_assert) &&
+                             match_term(open_paren) &&
+                             expr() &&
+                             match_term(open_paren)
   end
 
   function asg_tail()
+    println("this is asg_tail, nxtype is ", nxtype())
     nxtype() == assign && return match_term(assign) && expr()
   end
 
   function expr()
+    println("this is expr, nxtype is ", nxtype())
     nxtype() ∈ keys(unary_ops) && return unary_op() && operand()
     return operand() && op_tail()
   end
 
   function unary_op()
+    println("this is unary_op, nxtype is ", nxtype())
     return match_term(log_not)
   end
 
   function operand()
-    if nxtype() == open_paren
+    println("this is operand, nxtype is ", nxtype())
+    t = nxtype()
+    if t == open_paren
       return match_term(open_paren) && expr() && match_term(close_paren)
     end
     return match_term(nxtype())
   end
 
   function op_tail()
+    println("this is op_tail, nxtype is ", nxtype())
     t = nxtype()
     t ∈ keys(binary_ops) && return op() && operand()
+    return true
   end
 
   function op()
-    
+    println("this is op, nxtype is ", nxtype())
+    t = nxtype()
+    t ∈ keys(binary_ops) && return match_term(t)
+    error("Expected a binary operator, got ", nxtype())
   end
 
   function var_ident()
-      
+    println("this is var_ident, nxtype is ", nxtype())
+    return match_term(ident)
   end
 
   function tp()
-      
+    println("this is tp, nxtype is ", nxtype())
+    nxtype() ∈ [kw_bool, kw_int, kw_string] && return match_term(nxtype())
+    error("Expected a type, got ", nxtype())
   end
 
   next = 1
+  program()
 end
   
 end # module

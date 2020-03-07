@@ -16,7 +16,7 @@ const progAssignParens = "var x:int := (7*6); print x;"
  @test length(tokens) == 3
  @test tokens[1] isa Token
  @test tokens[2] isa Token
- @test tokens[3].type == m.eoi
+ @test tokens[3].class == m.eoi
 end
 
 @testset "Basic parsing" begin

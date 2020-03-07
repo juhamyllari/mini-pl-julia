@@ -88,7 +88,7 @@ end
 function parseInput(input::Array{Token,1})
   
   nxtok() = input[next]
-  nxtype() = input[next].type
+  nxtype() = input[next].class
 
   function match_term(terminal::TokenClass)
     println("match_term called with terminal $(terminal), next is $(nxtype())")
@@ -195,8 +195,10 @@ function parseInput(input::Array{Token,1})
       match_term(t)
       return Var(tok)
     end
-    match_term(t)
-    return Literal(tok)
+    if t ∈ [int_literal, string_literal]
+      match_term(t)
+      return Literal(tok)
+    end
   end
 
   function operation_tail()

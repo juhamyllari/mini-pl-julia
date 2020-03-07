@@ -3,7 +3,9 @@
   times
   plus
   minus
+  divide
   log_not
+  log_and
   equals
   less_than
   open_paren
@@ -11,6 +13,7 @@
   rng
   semicolon
   colon
+  doublequote
   int_literal
   string_literal
   assign
@@ -45,7 +48,7 @@ keywords = Dict([
   "string" => kw_string,
   "bool" => kw_bool,
   "assert" => kw_assert])
-operator_initials = ['*', '+', '-', '(', ')', '.', ';', ':', '!', '=', '<'] 
+symbol_initials = ['*', '+', '-', '/', '(', ')', '.', ';', ':', '!', '=', '<', '&'] 
 digits = '0':'9'
 unary_ops = Dict(
   log_not => '!'
@@ -54,20 +57,23 @@ binary_ops = Dict(
   times => '*',
   plus => '+',
   minus => '-',
+  divide => '/',
   equals => '=',
-  less_than => '<'
+  less_than => '<',
+  log_and => '&'
   )
 syntactic_symbols = Dict(
   open_paren => '(',
   close_paren => ')',
   colon => ':',
-  semicolon => ';'
+  semicolon => ';',
+  doublequote => '"'
 )
-operator_to_symbol = union(unary_ops, binary_ops, syntactic_symbols)
-symbol_to_operator = Dict([(sym => op) for (op, sym) ∈ operator_to_symbol])
+symbol_to_character = union(unary_ops, binary_ops, syntactic_symbols)
+character_to_symbol = Dict([(sym => op) for (op, sym) ∈ symbol_to_character])
 
 struct Token
-  type::TokenClass
+  class::TokenClass
   content::String
 end
 
@@ -87,17 +93,20 @@ function getToken(input, next)
   if input[next] ∈ ident_or_kw_initial
     return getIdentOrKw(input, next)
   end
-  if input[next] ∈ operator_initials
+  if input[next] ∈ symbol_initials
     return getOperator(input, next)
   end
   if input[next] ∈ digits
     return getInteger(input, next)
   end
+  if input[next] == '"'
+    return getString(input, next)
+  end
 end
 
 function getIdentOrKw(input, next)
   initial = next
-  while input[next] ∉ union(delimiters, operator_initials) next += 1 end
+  while input[next] ∉ union(delimiters, symbol_initials) next += 1 end
   str = input[initial:next-1]
   token = str ∈ keys(keywords) ? Token(keywords[str], str) : Token(ident, str)
   return token, next
@@ -112,7 +121,7 @@ function getOperator(input, next)
     input[next+1] == '=' && return Token(assign, ":="), next+2
     return Token(colon, ":"), next+1
   end
-  tokenClass = symbol_to_operator[input[next]]
+  tokenClass = character_to_symbol[input[next]]
   return Token(tokenClass, string(input[next])), next+1
 end
 
@@ -120,4 +129,16 @@ function getInteger(input, next)
   initial = next
   while input[next] ∈ digits next += 1 end
   return Token(int_literal, input[initial:next-1]), next
+end
+
+function getString(input, next)
+  println("This is getString, next is ", next)
+  initial = next
+  next += 1
+  while input[next] != '"'
+    next += 1
+    next >= length(input) && error("Reached the end of the program while
+      scanning a string literal. Did you forget the closing quote?")
+  end
+  return Token(string_literal, input[initial+1:next-1]), next+1
 end

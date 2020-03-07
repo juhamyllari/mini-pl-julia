@@ -1,5 +1,7 @@
 module MiniPL
 
+import Base: *,+,-,÷,<,!
+
 export Token, scanInput, TokenClass
 
 include("Parser.jl")
@@ -15,31 +17,71 @@ struct SValue
   value::Union{Int,Bool,String}
 end
 
-function evaluate(node::Value, vars)
-  if node isa Literal
-    value = parse(Int, node.tok.content) 
+*(left::SValue, right::SValue) = SValue(MInt, left.value * right.value)
++(left::SValue, right::SValue) = SValue(MInt, left.value + right.value)
+-(left::SValue, right::SValue) = SValue(MInt, left.value - right.value)
+÷(left::SValue, right::SValue) = SValue(MInt, left.value ÷ right.value)
+<(left::SValue, right::SValue) = SValue(MBool, left.value < right.value)
+!(operand::SValue) = SValue(MBool, !operand.value)
+
+operator_to_function = Dict(
+  times => *,
+  plus => +,
+  minus => -,
+  divide => ÷,
+  equals => ==,
+  log_and => &,
+  log_not => !,
+  less_than => <
+)
+
+function evaluate(l::Literal)
+  if l.tok.class == int_literal
+    value = parse(Int, l.tok.content)
     return SValue(MInt, value)
   end
-  if node isa Var
-    return vars[node.tok.content]
-  end
-  if node isa UnaryOperation
-    return evalUnary(node)
+  if l.tok.class == string_literal
+    return SValue(MString, l.tok.content)
   end
 end
 
-function evalUnary(node::UnaryOperation)
-  if node.operator.type == log_not
-    return SValue(MBool, !(evaluate(node.operand).value))
-  end
+evaluate(l::Literal, vars) = evaluate(l)
+
+function evaluate(v::Var, vars)
+  return vars[v.variable.content]
+end
+    
+function evaluate(node::UnaryOperation, vars)
+  operation = operator_to_function[node.operator.class]
+  return operation(evaluate(node.operand, vars))
 end
 
-function executeStatement(s::Statement)
+function evaluate(node::BinaryOperation, vars)
+  operation = operator_to_function[node.operator.class]
+  left = evaluate(node.leftOperand, vars)
+  right = evaluate(node.rightOperand, vars)
+  return operation(left, right)
+end
+
+function executeStatements(statements::Array{Statement,1})
   vars = Dict{String,SValue}()
-  if s isa DecAssignment
-    value = 
-    push!(vars, s.variable => s.)
+  for statement in statements
+    executeStatement(statement, vars)
   end
 end
-  
+
+executeProgram(p::Program) = executeStatements(p.statements)
+run(program::String) = executeProgram(parseInput(scanInput(program)))
+
+function executeStatement(s::Statement, vars::Dict)
+  if s isa DecAssignment
+    push!(vars, s.variable.content => evaluate(s.value, vars))
+  end
+  if s isa Print
+    println(evaluate(s.argument, vars).value)
+  end
+end
+
+executeStatement(s::Statement) = executeStatement(s, vars = Dict{String,SValue}())
+
 end # module

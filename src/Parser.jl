@@ -4,7 +4,7 @@ abstract type Node end
 abstract type Statement <: Node end
 abstract type Value <: Node end
 
-struct Program <: Node
+struct Statements <: Node
   statements::Array{Statement,1}
 end
 
@@ -15,6 +15,7 @@ end
 struct Declaration <: Statement
   variable::Token
   type::Token
+  line::Int
 end
 
 struct DecAssignment <: Statement
@@ -26,9 +27,7 @@ end
 struct Assignment <: Statement
   variable::Token
   value::Value
-end
-
-struct AssignmentTail <: Node
+  line::Int
 end
 
 struct EmptyAssignmentTail <: Node
@@ -47,6 +46,7 @@ end
 
 struct Assert <: Statement
   argument::Value
+  line::Int
 end
 
 struct Literal <: Value
@@ -88,44 +88,52 @@ end
 function parseInput(input::Array{Token,1})
   
   nxtok() = input[next]
-  nxtype() = input[next].class
+  nxtclass() = input[next].class
 
   function match_term(terminal::TokenClass)
-    println("match_term called with terminal $(terminal), next is $(nxtype())")
-    does_match = terminal == nxtype()
+    println("match_term called with terminal $(terminal), next is $(nxtclass())")
+    class = nxtclass()
+    does_match = terminal == class
+    if !does_match
+      if terminal == semicolon && class == eoi
+        error("Unexpected end of input. Did you forget a semicolon?")
+      end
+    end
     next += 1
     return does_match
   end
   
-  function program()
-    println("this is program, nxtype is ", nxtype())
+  function statements()
+    println("this is program, nxtype is ", nxtclass())
     statements = Array{Node,1}()
-    while nxtype() != eoi
+    while nxtclass() ∉ [eoi, kw_end]
       push!(statements, statement())
       match_term(semicolon)
     end
-    return Program(statements)
+    return Statements(statements)
   end
 
   function statement()
-    println("this is statement, nxtype is ", nxtype())
-    t = nxtype()
+    println("this is statement, nxtype is ", nxtclass())
+    t = nxtclass()
     if t == kw_var
+      line = nxtok().line
       match_term(kw_var)
       var_id_tok = var_ident().tok
       match_term(colon)
       var_type_tok = type_keyword().tok
-      tail = asg_tail()
-      if tail isa EmptyAssignmentTail
-        return Declaration(var_id_tok, var_type_tok)
+      if nxtclass() == assign
+        match_term(assign)
+        return DecAssignment(var_id_tok, var_type_tok, expr())
       end
-      return DecAssignment(var_id_tok, var_type_tok, tail)
+      return Declaration(var_id_tok, var_type_tok, line)
     end
     if t == ident
       variable = var_ident().tok
+      line = nxtok().line
       match_term(assign)
       value = expr()
-      return Assignment(variable, value)
+      return Assignment(variable, value, line)
     end
     t == kw_for && return match_term(kw_for) &&
                           var_ident() &&
@@ -145,15 +153,19 @@ function parseInput(input::Array{Token,1})
       match_term(kw_print)
       return Print(expr())
     end
-    t == kw_assert && return match_term(kw_assert) &&
-                             match_term(open_paren) &&
-                             expr() &&
-                             match_term(open_paren)
+    if t == kw_assert
+      line = nxtok().line
+      match_term(kw_assert)
+      match_term(open_paren)
+      argument = expr()
+      match_term(open_paren)
+      return Assert(argument, line)
+    end
   end
 
   function asg_tail()
-    println("this is asg_tail, nxtype is ", nxtype())
-    if nxtype() == assign
+    println("this is asg_tail, nxtype is ", nxtclass())
+    if nxtclass() == assign
       match_term(assign)
       return expr()
     end
@@ -161,8 +173,8 @@ function parseInput(input::Array{Token,1})
   end
 
   function expr()
-    println("this is expr, nxtype is ", nxtype())
-    if nxtype() ∈ keys(unary_ops)
+    println("this is expr, nxtype is ", nxtclass())
+    if nxtclass() ∈ keys(unary_ops)
       return UnaryOperation(unary_op().tok, operand())
     end
     oprnd = operand()
@@ -174,16 +186,16 @@ function parseInput(input::Array{Token,1})
   end
 
   function unary_op()
-    println("this is unary_op, nxtype is ", nxtype())
-    t = nxtype()
+    println("this is unary_op, nxtype is ", nxtclass())
+    t = nxtclass()
     tok = nxtok()
     match_term(t)
     return Operator(tok)
   end
 
   function operand()
-    println("this is operand, nxtype is ", nxtype())
-    t = nxtype()
+    println("this is operand, nxtype is ", nxtclass())
+    t = nxtclass()
     tok = nxtok()
     if t == open_paren
       match_term(open_paren)
@@ -202,8 +214,8 @@ function parseInput(input::Array{Token,1})
   end
 
   function operation_tail()
-    println("this is operation_tail, nxtype is ", nxtype())
-    t = nxtype()
+    println("this is operation_tail, nxtype is ", nxtclass())
+    t = nxtclass()
     if t ∈ keys(binary_ops)
       return OperationTail(operator(), operand())
     end
@@ -211,8 +223,8 @@ function parseInput(input::Array{Token,1})
   end
 
   function operator()
-    println("this is operator, nxtype is ", nxtype())
-    t = nxtype()
+    println("this is operator, nxtype is ", nxtclass())
+    t = nxtclass()
     tok = nxtok()
     if t ∈ keys(binary_ops)
       match_term(t)
@@ -222,23 +234,25 @@ function parseInput(input::Array{Token,1})
   end
 
   function var_ident()
-    println("this is var_ident, nxtype is ", nxtype())
+    println("this is var_ident, nxtype is ", nxtclass())
     tok = nxtok()
     match_term(ident)
     return VarIdent(tok)
   end
 
   function type_keyword()
-    println("this is type_keyword, nxtype is ", nxtype())
-    t = nxtype()
+    println("this is type_keyword, nxtype is ", nxtclass())
+    t = nxtclass()
     if t ∈ [kw_bool, kw_int, kw_string]
       tok = nxtok()
       match_term(t)
       return ValueType(tok)
     end
-    error("Expected a type, got ", nxtype())
+    error("Expected a type, got ", nxtclass())
   end
 
   next = 1
-  program()
+  statements()
 end
+
+parseInput(source::String) = parseInput(scanInput(source))

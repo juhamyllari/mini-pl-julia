@@ -72,17 +72,27 @@ syntactic_symbols = Dict(
 symbol_to_character = union(unary_ops, binary_ops, syntactic_symbols)
 character_to_symbol = Dict([(sym => op) for (op, sym) ∈ symbol_to_character])
 
-struct Token
+mutable struct Token
   class::TokenClass
   content::String
+  line::Int
 end
+
+Token(class::TokenClass, content::String) = Token(class, content, 0)
 
 function scanInput(input::AbstractString, next = 1)
   input *= end_of_input_symbol
   tokens = Array{Token,1}()
+  lineNumber = 1
   while next < length(input)
-    while input[next] in whitespace next += 1 end
+    while input[next] in whitespace
+      if input[next] == '\n'
+        lineNumber += 1
+      end
+      next += 1
+    end
     token, next = getToken(input, next)
+    token.line = lineNumber
     push!(tokens, token)
   end
   push!(tokens, Token(eoi, string(end_of_input_symbol)))

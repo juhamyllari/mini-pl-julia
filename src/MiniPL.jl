@@ -1,10 +1,14 @@
 module MiniPL
 
-import Base: *,+,-,÷,<,!
+import Base: *,+,-,÷,<,!,&
 
 export Token, scanInput, TokenClass
 
 include("Parser.jl")
+
+default_int_value = 0
+default_bool_value = true
+default_string_value = ""
 
 @enum MPLType begin
   MInt
@@ -17,11 +21,18 @@ struct SValue
   value::Union{Int,Bool,String}
 end
 
+function SValue(tc::TokenClass)
+  if tc == kw_int return SValue(MInt, 0) end
+  if tc == kw_bool return SValue(MBool, false) end
+  if tc == kw_string return SValue(MString, "") end
+end
+
 *(left::SValue, right::SValue) = SValue(MInt, left.value * right.value)
 +(left::SValue, right::SValue) = SValue(MInt, left.value + right.value)
 -(left::SValue, right::SValue) = SValue(MInt, left.value - right.value)
 ÷(left::SValue, right::SValue) = SValue(MInt, left.value ÷ right.value)
 <(left::SValue, right::SValue) = SValue(MBool, left.value < right.value)
+&(left::SValue, right::SValue) = SValue(MBool, left.value & right.value)
 !(operand::SValue) = SValue(MBool, !operand.value)
 
 operator_to_function = Dict(
@@ -70,18 +81,41 @@ function executeStatements(statements::Array{Statement,1})
   end
 end
 
-executeProgram(p::Program) = executeStatements(p.statements)
+executeProgram(p::Statements) = executeStatements(p.statements)
 run(program::String) = executeProgram(parseInput(scanInput(program)))
 
-function executeStatement(s::Statement, vars::Dict)
-  if s isa DecAssignment
-    push!(vars, s.variable.content => evaluate(s.value, vars))
-  end
-  if s isa Print
-    println(evaluate(s.argument, vars).value)
+executeStatement(s::Statement) = executeStatement(s, vars = Dict{String,SValue}())
+
+function executeStatement(d::Declaration, vars::Dict)
+  varName = d.variable.content
+  if varName ∈ keys(vars)
+    error("Attempting to declare existing variable $(varName) on line $(d.line).")
+  else
+    push!(vars, varName => SValue(d.type.class))
   end
 end
 
-executeStatement(s::Statement) = executeStatement(s, vars = Dict{String,SValue}())
+function executeStatement(d::DecAssignment, vars::Dict)
+  push!(vars, d.variable.content => evaluate(d.value, vars))
+end
+
+function executeStatement(a::Assignment, vars::Dict)
+  varName = a.variable.content
+  if varName ∈ keys(vars)
+    push!(vars, varName => evaluate(a.value, vars))
+  else
+    error("Attempting to assign to undeclared variable $(varName) on line $(a.line).")
+  end
+end
+
+function executeStatement(p::Print, vars::Dict)
+    println(evaluate(p.argument, vars).value)
+end
+
+function executeStatement(a::Assert, vars::Dict)
+    if !(evaluate(a.argument, vars).value)
+      println("Assertion on line $(a.line) failed.")
+    end
+end
 
 end # module

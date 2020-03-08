@@ -161,6 +161,7 @@ function parseInput(input::Array{Token,1})
       match_term(open_paren)
       return Assert(argument, line)
     end
+    error("Failed to parse statement on line $(nxtok().line)")
   end
 
   function asg_tail()

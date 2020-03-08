@@ -27,13 +27,13 @@ function SValue(tc::TokenClass)
   if tc == kw_string return SValue(MString, "") end
 end
 
-*(left::SValue, right::SValue) = SValue(MInt, left.value * right.value)
-+(left::SValue, right::SValue) = SValue(MInt, left.value + right.value)
--(left::SValue, right::SValue) = SValue(MInt, left.value - right.value)
-÷(left::SValue, right::SValue) = SValue(MInt, left.value ÷ right.value)
-<(left::SValue, right::SValue) = SValue(MBool, left.value < right.value)
-&(left::SValue, right::SValue) = SValue(MBool, left.value & right.value)
-!(operand::SValue) = SValue(MBool, !operand.value)
+(*)(left::SValue, right::SValue) = SValue(MInt, left.value * right.value)
+(+)(left::SValue, right::SValue) = SValue(MInt, left.value + right.value)
+(-)(left::SValue, right::SValue) = SValue(MInt, left.value - right.value)
+(÷)(left::SValue, right::SValue) = SValue(MInt, left.value ÷ right.value)
+(<)(left::SValue, right::SValue) = SValue(MBool, left.value < right.value)
+(&)(left::SValue, right::SValue) = SValue(MBool, left.value & right.value)
+(!)(operand::SValue) = SValue(MBool, !operand.value)
 
 operator_to_function = Dict(
   times => *,

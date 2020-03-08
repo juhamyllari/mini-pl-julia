@@ -84,33 +84,50 @@ function scanInput(input::AbstractString, next = 1)
   input *= end_of_input_symbol
   tokens = Array{Token,1}()
   lineNumber = 1
-  while next < length(input)
-    while input[next] in whitespace
+  while next <= length(input)
+    commentNesting = 0
+    while input[next] in union(whitespace, '/') || commentNesting > 0
       if input[next] == '\n'
         lineNumber += 1
+        next += 1
+      elseif input[next] == '/' && input[next+1] == '/' && commentNesting == 0
+        while input[next] != '\n' && (next < length(input) - 1) next += 1 end
+      elseif input[next] == '/' && input[next+1] == '*'
+        commentNesting += 1
+        next += 2
+      elseif input[next] == '*' && input[next+1] == '/'
+        commentNesting -= 1
+        next += 2
+      else
+        next += 1
       end
-      next += 1
     end
-    token, next = getToken(input, next)
-    token.line = lineNumber
-    push!(tokens, token)
+    
+    if next <= length(input)
+      token, next = getToken(input, next)
+      token.line = lineNumber
+      push!(tokens, token)
+    end
   end
-  push!(tokens, Token(eoi, string(end_of_input_symbol)))
   return tokens
 end
 
 function getToken(input, next)
-  if input[next] ∈ ident_or_kw_initial
+  c = input[next]
+  if c ∈ ident_or_kw_initial
     return getIdentOrKw(input, next)
   end
-  if input[next] ∈ symbol_initials
+  if c ∈ symbol_initials
     return getOperator(input, next)
   end
-  if input[next] ∈ digits
+  if c ∈ digits
     return getInteger(input, next)
   end
-  if input[next] == '"'
+  if c == '"'
     return getString(input, next)
+  end
+  if c == '$'
+    return Token(eoi, string(end_of_input_symbol)), next+1
   end
 end
 

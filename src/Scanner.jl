@@ -28,6 +28,8 @@
   kw_string
   kw_bool
   kw_assert
+  kw_true
+  kw_false
   eoi
 end
 
@@ -47,7 +49,10 @@ keywords = Dict([
   "int" => kw_int,
   "string" => kw_string,
   "bool" => kw_bool,
-  "assert" => kw_assert])
+  "assert" => kw_assert,
+  "true" => kw_true,
+  "false" => kw_false
+  ])
 symbol_initials = ['*', '+', '-', '/', '(', ')', '.', ';', ':', '!', '=', '<', '&'] 
 digits = '0':'9'
 unary_ops = Dict(
@@ -141,7 +146,7 @@ end
 
 function getOperator(input, next)
   if input[next] == '.'
-    input[next+1] != '.' && error("expected two dots")
+    input[next+1] != '.' && error("Expected two dots.")
     return Token(rng, ".."), next+2
   end
   if input[next] == ':'
@@ -159,10 +164,10 @@ function getInteger(input, next)
 end
 
 function getString(input, next)
-  println("This is getString, next is ", next)
   initial = next
   next += 1
-  while input[next] != '"'
+  while (input[next] != '"' ||
+    (input[next] == '"' && input[next-1] == '\\'))
     next += 1
     next >= length(input) && error("Reached the end of the program while
       scanning a string literal. Did you forget the closing quote?")

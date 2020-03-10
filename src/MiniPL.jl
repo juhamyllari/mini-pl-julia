@@ -1,121 +1,109 @@
 module MiniPL
 
-import Base: *,+,-,÷,<,!,&
+import Base: *,+,-,÷,<,!,&,==
 
 export Token, scanInput, TokenClass
 
-include("Parser.jl")
+DEBUG = false
 
-default_int_value = 0
-default_bool_value = true
-default_string_value = ""
+include("StaticAnalyzer.jl")
 
-@enum MPLType begin
-  MInt
-  MBool
-  MString
+function run(program::String)
+  AST = parseInput(scanInput(program))
+  staticAnalysis(AST)
+  executeProgram(AST)
 end
-
-struct SValue
-  type::MPLType
-  value::Union{Int,Bool,String}
-end
-
-function SValue(tc::TokenClass)
-  if tc == kw_int return SValue(MInt, 0) end
-  if tc == kw_bool return SValue(MBool, false) end
-  if tc == kw_string return SValue(MString, "") end
-end
-
-(*)(left::SValue, right::SValue) = SValue(MInt, left.value * right.value)
-(+)(left::SValue, right::SValue) = SValue(MInt, left.value + right.value)
-(-)(left::SValue, right::SValue) = SValue(MInt, left.value - right.value)
-(÷)(left::SValue, right::SValue) = SValue(MInt, left.value ÷ right.value)
-(<)(left::SValue, right::SValue) = SValue(MBool, left.value < right.value)
-(&)(left::SValue, right::SValue) = SValue(MBool, left.value & right.value)
-(!)(operand::SValue) = SValue(MBool, !operand.value)
-
-operator_to_function = Dict(
-  times => *,
-  plus => +,
-  minus => -,
-  divide => ÷,
-  equals => ==,
-  log_and => &,
-  log_not => !,
-  less_than => <
-)
 
 function evaluate(l::Literal)
-  if l.tok.class == int_literal
-    value = parse(Int, l.tok.content)
+  if l.token.class == int_literal
+    value = parse(Int, l.token.content)
     return SValue(MInt, value)
-  end
-  if l.tok.class == string_literal
-    return SValue(MString, l.tok.content)
+  elseif l.token.class == string_literal
+    return SValue(MString, l.token.content)
+  elseif l.token.class == kw_true
+    return SValue(MBool, true)
+  elseif l.token.class == kw_false
+    return SValue(MBool, false)
   end
 end
 
-evaluate(l::Literal, vars) = evaluate(l)
+evaluate(l::Literal, st) = evaluate(l)
 
-function evaluate(v::Var, vars)
-  return vars[v.variable.content]
+function evaluate(v::Var, st::SymbolTable)
+  return getValue(st, v.variable.content)
 end
     
-function evaluate(node::UnaryOperation, vars)
+function evaluate(node::UnaryOperation, st::SymbolTable)
   operation = operator_to_function[node.operator.class]
-  return operation(evaluate(node.operand, vars))
+  return operation(evaluate(node.operand, st))
 end
 
-function evaluate(node::BinaryOperation, vars)
+function evaluate(node::BinaryOperation, st::SymbolTable)
   operation = operator_to_function[node.operator.class]
-  left = evaluate(node.leftOperand, vars)
-  right = evaluate(node.rightOperand, vars)
+  left = evaluate(node.leftOperand, st)
+  right = evaluate(node.rightOperand, st)
   return operation(left, right)
 end
 
-function executeStatements(statements::Array{Statement,1})
-  vars = Dict{String,SValue}()
-  for statement in statements
-    executeStatement(statement, vars)
+function executeStatements(statements::Array{Statement,1}, st::SymbolTable)
+  for s in statements
+    executeStatement(s, st)
   end
 end
+
+executeStatements(s::Statements, st::SymbolTable) =
+  executeStatements(s.statements, st)
+
+executeStatements(s::Array{Statement,1}) =
+  executeStatements(s, SymbolTable())
 
 executeProgram(p::Statements) = executeStatements(p.statements)
-run(program::String) = executeProgram(parseInput(scanInput(program)))
 
-executeStatement(s::Statement) = executeStatement(s, vars = Dict{String,SValue}())
+function executeStatement(d::Declaration, st::SymbolTable)
+  addOrUpdateSymbol(st, d.variable.content, SValue(d.type.class))
+end
 
-function executeStatement(d::Declaration, vars::Dict)
-  varName = d.variable.content
-  if varName ∈ keys(vars)
-    error("Attempting to declare existing variable $(varName) on line $(d.line).")
-  else
-    push!(vars, varName => SValue(d.type.class))
+function executeStatement(d::DecAssignment, st::SymbolTable)
+  addOrUpdateSymbol(st, d.variable.content, evaluate(d.value, st))
+end
+
+function executeStatement(a::Assignment, st::SymbolTable)
+  addOrUpdateSymbol(st, a.variable.content, evaluate(a.value, st))
+end
+
+function executeStatement(f::For, st::SymbolTable)
+  varName = f.variable.content
+  from = evaluate(f.from, st).value
+  to = evaluate(f.to, st).value
+  for i in from:to
+    setIterationVariable(st, varName, i)
+    executeStatements(f.body, st)
+  end
+  releaseIterationVariable(st, varName)
+end
+
+function executeStatement(p::Print, st::SymbolTable)
+    print(evaluate(p.argument, st).value)
+end
+
+function executeStatement(r::Read, st::SymbolTable)
+  varName = r.variable.content
+  type = getValue(st, varName).type
+  println("\n<MiniPL is waiting for input>")
+  rawInput = split(readline())[1]
+  if type == MInt
+    addOrUpdateSymbol(st, varName, SValue(MInt, parse(Int, rawInput)))
+  elseif type == MString
+    addOrUpdateSymbol(st, varName, SValue(MString, string(rawInput)))
+  elseif type == MBool
+    addOrUpdateSymbol(st, varName, SValue(MBool, parse(Bool, rawInput)))
   end
 end
 
-function executeStatement(d::DecAssignment, vars::Dict)
-  push!(vars, d.variable.content => evaluate(d.value, vars))
-end
-
-function executeStatement(a::Assignment, vars::Dict)
-  varName = a.variable.content
-  if varName ∈ keys(vars)
-    push!(vars, varName => evaluate(a.value, vars))
-  else
-    error("Attempting to assign to undeclared variable $(varName) on line $(a.line).")
+function executeStatement(a::Assert, st::SymbolTable)
+  if !(evaluate(a.argument, st).value)
+    println("Assertion on line $(a.line) failed.")
   end
-end
-
-function executeStatement(p::Print, vars::Dict)
-    println(evaluate(p.argument, vars).value)
-end
-
-function executeStatement(a::Assert, vars::Dict)
-    if !(evaluate(a.argument, vars).value)
-      println("Assertion on line $(a.line) failed.")
-    end
 end
 
 end # module

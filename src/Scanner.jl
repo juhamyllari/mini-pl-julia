@@ -1,3 +1,7 @@
+struct LexicalException <: Exception
+  msg::String
+end
+
 @enum TokenClass begin
   ident
   times
@@ -79,11 +83,11 @@ character_to_symbol = Dict([(sym => op) for (op, sym) ∈ symbol_to_character])
 
 mutable struct Token
   class::TokenClass
-  content::String
+  lexeme::String
   line::Int
 end
 
-Token(class::TokenClass, content::String) = Token(class, content, 0)
+Token(class::TokenClass, lexeme::String) = Token(class, lexeme, 0)
 
 function scanInput(input::AbstractString, next = 1)
   input *= end_of_input_symbol
@@ -91,7 +95,10 @@ function scanInput(input::AbstractString, next = 1)
   lineNumber = 1
   while next <= length(input)
     commentNesting = 0
-    while input[next] in union(whitespace, '/') || commentNesting > 0
+    while (input[next] in whitespace
+      || commentNesting > 0
+      || (input[next] == '/' && input[next+1] == '/')
+      || (input[next] == '/' && input[next+1] == '*'))
       if input[next] == '\n'
         lineNumber += 1
         next += 1
@@ -109,7 +116,7 @@ function scanInput(input::AbstractString, next = 1)
     end
     
     if next <= length(input)
-      token, next = getToken(input, next)
+      token, next = getToken(input, next, lineNumber)
       token.line = lineNumber
       push!(tokens, token)
     end
@@ -117,26 +124,28 @@ function scanInput(input::AbstractString, next = 1)
   return tokens
 end
 
-function getToken(input, next)
+function getToken(input, next, lineNumber)
   c = input[next]
   if c ∈ ident_or_kw_initial
-    return getIdentOrKw(input, next)
+    return getIdentOrKw(input, next, lineNumber)
   end
   if c ∈ symbol_initials
-    return getOperator(input, next)
+    return getOperator(input, next, lineNumber)
   end
   if c ∈ digits
-    return getInteger(input, next)
+    return getInteger(input, next, lineNumber)
   end
   if c == '"'
-    return getString(input, next)
+    return getString(input, next, lineNumber)
   end
   if c == '$'
     return Token(eoi, string(end_of_input_symbol)), next+1
   end
+  throw(LexicalException(
+    "Characted $(c) on or near line $(lineNumber) is not part of a legal token."))
 end
 
-function getIdentOrKw(input, next)
+function getIdentOrKw(input, next, lineNumber)
   initial = next
   while input[next] ∉ union(delimiters, symbol_initials) next += 1 end
   str = input[initial:next-1]
@@ -144,9 +153,10 @@ function getIdentOrKw(input, next)
   return token, next
 end
 
-function getOperator(input, next)
+function getOperator(input, next, lineNumber)
   if input[next] == '.'
-    input[next+1] != '.' && error("Expected two dots.")
+    input[next+1] != '.' && throw(LexicalException(
+      "A single dot (on line $(lineNumber)) is not a valid token. Did you mean '..'?"))
     return Token(rng, ".."), next+2
   end
   if input[next] == ':'
@@ -157,20 +167,20 @@ function getOperator(input, next)
   return Token(tokenClass, string(input[next])), next+1
 end
 
-function getInteger(input, next)
+function getInteger(input, next, lineNumber)
   initial = next
   while input[next] ∈ digits next += 1 end
   return Token(int_literal, input[initial:next-1]), next
 end
 
-function getString(input, next)
+function getString(input, next, lineNumber)
   initial = next
   next += 1
   while (input[next] != '"' ||
     (input[next] == '"' && input[next-1] == '\\'))
     next += 1
-    next >= length(input) && error("Reached the end of the program while
-      scanning a string literal. Did you forget the closing quote?")
+    next >= length(input) && throw(LexicalException("Reached the end of the program while
+      scanning a string literal. Did you forget the closing quote?"))
   end
   return Token(string_literal, input[initial+1:next-1]), next+1
 end

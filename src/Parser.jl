@@ -1,16 +1,15 @@
 include("Scanner.jl")
 
+struct SyntaxException <: Exception
+  msg::String
+end
+
 abstract type Node end
 abstract type Statement <: Node end
 abstract type Value <: Node end
 
 struct Statements <: Node
   statements::Array{Statement,1}
-  line::Int
-end
-
-struct ValueType <: Node
-  token::Token
   line::Int
 end
 
@@ -84,7 +83,7 @@ struct Var <: Value
   line::Int
 end
 
-struct VarIdent <: Node
+struct LeftVal <: Node
   token::Token
   line::Int
 end
@@ -93,25 +92,33 @@ function parseInput(input::Array{Token,1})
   
   function nxtok()
     if next > length(input)
-      error("Failed to parse program. Do all your statements have a terminating semicolon?")
+      throw(SyntaxException(
+        "Failed to parse program. Do all your statements have a terminating semicolon?"))
     end
     return input[next]
   end
 
   nxtclass() = nxtok().class
 
+  function tok_class_line()
+    tok = nxtok()
+    return tok, tok.class, tok.line
+  end
+
   function match_term(terminal::TokenClass)
     DEBUG && println("match_term called in $(currentUnit) with terminal $(terminal), next is $(nxtclass())")
-    class = nxtclass()
+    token, class, line = tok_class_line()
     does_match = terminal == class
     if !does_match
-      line = nxtok().line
       if terminal == semicolon && class == eoi
-        error("Unexpected end of input. Did you forget a semicolon?")
+        throw(SyntaxException(
+          "Unexpected end of input. Did you forget a semicolon?"))
       elseif terminal == ident && class ∈ values(keywords)
-        error("Expected a variable identifier but got keyword \"$(nxtok().content)\" on line $(line).")
+        throw(SyntaxException(
+          "Expected a variable identifier but got keyword \"$(token.lexeme)\" on line $(line)."))
       else
-        error("Failed to parse $(currentUnit) on or around line $(line).")
+        throw(SyntaxException(
+          "Failed to parse $(currentUnit) on or around line $(line)."))
       end
     end
     next += 1
@@ -120,8 +127,8 @@ function parseInput(input::Array{Token,1})
   
   function statements()
     currentUnit = "group of statements"
-    DEBUG && println("this is statements, nxtype is ", nxtclass())
-    line = nxtok().line
+    token, class, line = tok_class_line()
+    DEBUG && println("this is statements, nxtype is ", class)
     stmts = Array{Node,1}()
     while nxtclass() ∉ [eoi, kw_end]
       push!(stmts, statement())
@@ -132,31 +139,38 @@ function parseInput(input::Array{Token,1})
 
   function statement()
     currentUnit = "statement"
-    DEBUG && println("this is statement, nxtype is ", nxtclass())
-    class = nxtclass()
+    token, class, line = tok_class_line()
+    DEBUG && println("this is statement, nxtype is ", class)
     if class == kw_var
-      line = nxtok().line
+      # Parse a declaration or a declaration-assignment
       match_term(kw_var)
-      var_id_tok = var_ident().token
+      leftval_tok = leftval_ident().token
       match_term(colon)
-      var_type_tok = type_keyword().token
+      token, class, line = tok_class_line()
+      if class ∉ [kw_bool, kw_int, kw_string]
+        throw(SyntaxException(
+          "Expected a type keyword on line $(line), got '$(token.lexeme)'."))
+      end
+      var_type_tok = token
+      match_term(class)
       if nxtclass() == assign
         match_term(assign)
-        return DecAssignment(var_id_tok, var_type_tok, expr(), line)
+        return DecAssignment(leftval_tok, var_type_tok, expr(), line)
       end
-      return Declaration(var_id_tok, var_type_tok, line)
+      return Declaration(leftval_tok, var_type_tok, line)
     end
     if class == ident
-      variable = var_ident().token
+      # Parse an assignment
+      leftval_tok = leftval_ident().token
       line = nxtok().line
       match_term(assign)
       value = expr()
-      return Assignment(variable, value, line)
+      return Assignment(leftval_tok, value, line)
     end
     if class == kw_for
-      line = nxtok().line
+      # Parse a for-loop statement
       match_term(kw_for)
-      var_token = var_ident().token
+      iter_var_token = leftval_ident().token
       match_term(kw_in)
       from = expr()
       match_term(rng)
@@ -165,45 +179,46 @@ function parseInput(input::Array{Token,1})
       body = statements()
       match_term(kw_end)
       match_term(kw_for)
-      return For(var_token, from, to, body, line)
+      return For(iter_var_token, from, to, body, line)
     end
     if class == kw_read
-      line = nxtok().line
+      # Parse a read statement
       match_term(kw_read)
-      return Read(var_ident().token, line)
+      return Read(leftval_ident().token, line)
     end
     if class == kw_print
-      line = nxtok().line
+      # Parse a print statement
       match_term(kw_print)
       return Print(expr(), line)
     end
     if class == kw_assert
-      line = nxtok().line
+      # Parse an assert statement
       match_term(kw_assert)
       if nxtclass() != open_paren
-        error("The argument of an assert statement must be in parentheses (line $(line)).")
+        throw(SyntaxException(
+          "The argument of an assert statement must be in parentheses (line $(line))."))
       end
       match_term(open_paren)
       argument = expr()
       match_term(close_paren)
       return Assert(argument, line)
     end
-    error("Failed to parse statement on line $(nxtok().line)")
+    throw(SyntaxException(
+      "Failed to parse statement on line $(line)"))
   end
 
   function expr()
     currentUnit = "expression"
-    DEBUG && println("this is expr, nxtype is ", nxtclass())
-    if nxtclass() ∈ keys(unary_ops)
-      line = nxtok().line
+    token, class, line = tok_class_line()
+    DEBUG && println("this is expr, nxtclass is ", nxtclass())
+    if class ∈ keys(unary_ops)
       return UnaryOperation(unary_op().token, operand(), line)
     end
     leftOperand = operand()
-    if nxtclass() ∈ keys(binary_ops)
+    token, class, line = tok_class_line()
+    if class ∈ keys(binary_ops)
       currentUnit = "binary operation"
-      DEBUG && println("this is expr parsing binary op, nxtype is ", nxtclass())
-      class = nxtclass()
-      line = nxtok().line
+      DEBUG && println("this is expr parsing binary op, nxtclass is ", class)
       operatorToken = operator().token
       rightOperand = operand()
       return BinaryOperation(leftOperand, operatorToken, rightOperand, line)
@@ -213,18 +228,16 @@ function parseInput(input::Array{Token,1})
 
   function unary_op()
     currentUnit = "unary operation"
-    DEBUG && println("this is unary_op, nxtype is ", nxtclass())
-    class = nxtclass()
-    token = nxtok()
+    token, class, line = tok_class_line()
+    DEBUG && println("this is unary_op, nxtclass is ", class)
     match_term(class)
-    return Operator(token, token.line)
+    return Operator(token, line)
   end
 
   function operand()
     currentUnit = "operand"
-    class = nxtclass()
-    DEBUG && println("this is operand, nxtype is ", class)
-    token = nxtok()
+    token, class, line = tok_class_line()
+    DEBUG && println("this is operand, nxtclass is ", class)
     if class == open_paren
       match_term(open_paren)
       expression = expr()
@@ -233,46 +246,55 @@ function parseInput(input::Array{Token,1})
     end
     if class == ident
       match_term(class)
-      return Var(token, token.line)
+      return Var(token, line)
     end
     if class ∈ [int_literal, string_literal, kw_true, kw_false]
       match_term(class)
-      return Literal(token, token.line)
+      return Literal(token, line)
     end
+    throw(SyntaxException(
+      "Expected an operand on line $(line), got '$(token.lexeme)'."
+    ))
   end
 
   function operator()
     currentUnit = "operator"
-    DEBUG && println("this is operator, nxtype is ", nxtclass())
-    t = nxtclass()
-    token = nxtok()
-    if t ∈ keys(binary_ops)
-      match_term(t)
-      return Operator(token, token.line)
-    end
-    error("Expected a binary operator, got ", token)
-  end
-
-  function var_ident()
-    currentUnit = "identifier"
-    DEBUG && println("this is var_ident, nxtype is ", nxtclass())
-    token = nxtok()
-    match_term(ident)
-    return VarIdent(token, token.line)
-  end
-
-  function type_keyword()
-    currentUnit = "keyword"
-    DEBUG && println("this is type_keyword, nxtype is ", nxtclass())
-    class = nxtclass()
-    if class ∈ [kw_bool, kw_int, kw_string]
-      token = nxtok()
+    token, class, line = tok_class_line()
+    DEBUG && println("this is operator, nxtclass is ", class)
+    if class ∈ keys(binary_ops)
       match_term(class)
-      return ValueType(token, token.line)
+      return Operator(token, line)
     end
-    error("Expected a type, got ", nxtclass())
+    throw(SyntaxException(
+      "Expected a binary operator on line $(line), got '$(token.lexeme)'."
+    ))
   end
 
+  function leftval_ident()
+    currentUnit = "identifier"
+    token, class, line = tok_class_line()
+    DEBUG && println("this is leftval_ident, nxtclass is ", class)
+    match_term(ident)
+    return LeftVal(token, line)
+  end
+
+  # function type_keyword()
+  #   currentUnit = "keyword"
+  #   token, class, line = tok_class_line()
+  #   DEBUG && println("this is type_keyword, nxtclass is ", class)
+  #   if class ∈ [kw_bool, kw_int, kw_string]
+  #     match_term(class)
+  #     return ValueType(token, line)
+  #   end
+  #   throw(SyntaxException(
+  #     "Expected a type keyword on line $(line), got '$(token.lexeme)'."))
+  # end
+
+  if length(input) < 2
+    throw(SyntaxException(
+      "The empty string is not a valid program."
+    ))
+  end
   next = 1
   currentUnit = "program"
   statements()

@@ -2,11 +2,6 @@ using Revise
 using MiniPL
 using Test
 
-# @testset "MiniPL.jl" begin
-
-#     MiniPL.parse("Hello world!") isa Token
-# end
-
 const m = MiniPL
 const progAssignLiteral = "var x:int := 42;"
 const progAssignParens = "var x:int := (7*6); print x;"

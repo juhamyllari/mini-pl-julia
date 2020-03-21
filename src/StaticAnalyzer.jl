@@ -1,5 +1,9 @@
 include("Parser.jl")
 
+struct StaticAnalysisException <: Exception
+  msg::String
+end
+
 default_int_value = -1
 default_bool_value = false
 default_string_value = ""
@@ -113,7 +117,7 @@ function staticAnalysis(program::Statements)
 end
 
 function staticAnalysis(r::Read, st::SymbolTable)
-  varName = r.variable.content
+  varName = r.variable.lexeme
   if !hasSymbol(st, varName)
     error("Attempting to read into an unassigned variable on line $(r.line).")
   end
@@ -126,7 +130,7 @@ function staticAnalysis(a::Assert, st::SymbolTable)
 end
 
 function staticAnalysis(d::Declaration, st::SymbolTable)
-  varName = d.variable.content
+  varName = d.variable.lexeme
   if hasSymbol(st, varName)
     error("Attempting to declare existing variable $(varName) on line $(d.line).")
   else
@@ -135,7 +139,7 @@ function staticAnalysis(d::Declaration, st::SymbolTable)
 end
 
 function staticAnalysis(d::DecAssignment, st::SymbolTable)
-  varName = d.variable.content
+  varName = d.variable.lexeme
   if hasSymbol(st, varName)
     error("Attempting to declare existing variable $(varName) on line $(d.line).")
   else
@@ -144,7 +148,10 @@ function staticAnalysis(d::DecAssignment, st::SymbolTable)
 end
 
 function staticAnalysis(f::For, st::SymbolTable)
-  varName = f.variable.content
+  varName = f.variable.lexeme
+  if (hasSymbol(st, varName) && getValue(st, varName).type != MInt)
+    error("Iteration variable on line $(f.line) has non-integer type.")
+  end
   setIterationVariable(st, varName, 1)
   for stmt in f.body.statements
     staticAnalysis(stmt, st)
@@ -157,7 +164,7 @@ function staticAnalysis(p::Print, st::SymbolTable)
 end
 
 function staticAnalysis(a::Assignment, st::SymbolTable)
-  varName = a.variable.content
+  varName = a.variable.lexeme
   if !hasSymbol(st, varName)
     error("Attempting to assign a value to an undeclared variable on line $(a.line).")
   end
@@ -167,7 +174,7 @@ function staticAnalysis(a::Assignment, st::SymbolTable)
     error("""Attempting to assign a value of type $(valueType)
              to a variable of type $(variableType) on line $(a.line).""")
   end
-  addOrUpdateSymbol(st, varName, evaluate(a.value, st))
+  addOrUpdateSymbol(st, varName, SValue(valueType))
 end
 
 function typeCheck(l::Literal, st::SymbolTable)
@@ -187,16 +194,16 @@ function typeCheck(b::BinaryOperation, st::SymbolTable)
   leftType = typeCheck(b.leftOperand, st)
   rightType = typeCheck(b.rightOperand, st)
   if leftType != rightType
-    error("Operand type mismatch on line $(b.line)")
+    throw(StaticAnalysisException("Operand type mismatch on line $(b.line)"))
   end
   operatorFunction = operator_to_function[b.operator.class]
   if (leftType, operatorFunction) ∈ keys(binary_result_types)
     return binary_result_types[(leftType, operatorFunction)]
   else
-    error("Operator \"$(b.operator.content)\" on line $(b.line) is not valid for provided argument types.")
+    error("Operator \"$(b.operator.lexeme)\" on line $(b.line) is not valid for provided argument types.")
   end
 end
 
 function typeCheck(v::Var, st::SymbolTable)
-  return getValue(st, v.variable.content).type
+  return getValue(st, v.variable.lexeme).type
 end

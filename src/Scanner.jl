@@ -176,11 +176,30 @@ end
 function getString(input, next, lineNumber)
   initial = next
   next += 1
+  str = Array{Char,1}()
   while (input[next] != '"' ||
     (input[next] == '"' && input[next-1] == '\\'))
-    next += 1
+    if input[next] == '\\'
+      next += 1
+      if input[next] == 'n'
+        push!(str, '\n')
+      end
+      if input[next] == 't'
+        push!(str, '\t')
+      end
+      if input[next] == '"'
+        push!(str, '"')
+      end
+      if input[next] == '\\'
+        push!(str, '\\')
+      end
+      next += 1
+    else
+      push!(str, input[next])
+      next += 1
+    end
     next >= length(input) && throw(LexicalException("Reached the end of the program while
       scanning a string literal. Did you forget the closing quote?"))
   end
-  return Token(string_literal, input[initial+1:next-1]), next+1
+  return Token(string_literal, join(str)), next+1
 end

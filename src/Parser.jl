@@ -278,18 +278,6 @@ function parseInput(input::Array{Token,1})
     return LeftVal(token, line)
   end
 
-  # function type_keyword()
-  #   currentUnit = "keyword"
-  #   token, class, line = tok_class_line()
-  #   DEBUG && println("this is type_keyword, nxtclass is ", class)
-  #   if class ∈ [kw_bool, kw_int, kw_string]
-  #     match_term(class)
-  #     return ValueType(token, line)
-  #   end
-  #   throw(SyntaxException(
-  #     "Expected a type keyword on line $(line), got '$(token.lexeme)'."))
-  # end
-
   if length(input) < 2
     throw(SyntaxException(
       "The empty string is not a valid program."

@@ -2,31 +2,22 @@ include("StaticAnalyzer.jl")
 
 struct ExecutionException <: Exception
   msg::String
+  line::Int
 end
 
 Base.showerror(io::IO, e::LexicalException) = print(io,
-  "A lexical error occurred: $(e.msg)")
+  "A lexical error occurred: $(e.msg)\n")
 Base.showerror(io::IO, e::SyntaxException) = print(io,
-  "A syntax error occurred: $(e.msg)")
+  "A syntax error occurred: $(e.msg)\n")
 Base.showerror(io::IO, e::StaticAnalysisException) = print(io,
-  "Static analysis produced an error: $(e.msg)")
+  "Static analysis produced an error: $(e.msg)\n")
 Base.showerror(io::IO, e::ExecutionException) = print(io,
-  "A run-time error occurred: $(e.msg)")
+  "Static analysis produced an error on line $(e.line): $(e.msg)\n")
 
 function run(program::String)
-  if DEBUG
-    AST = parseInput(scanInput(program))
-    staticAnalysis(AST)
-    executeProgram(AST)
-    return
-  end
-  try
-    AST = parseInput(scanInput(program))
-    staticAnalysis(AST)
-    executeProgram(AST)
-  catch e
-    sprint(showerror, e)
-  end
+  AST = parseInput(scanInput(program))
+  staticAnalysis(AST)
+  executeProgram(AST)
 end
 
 function evaluate(l::Literal)
@@ -57,6 +48,9 @@ function evaluate(node::BinaryOperation, st::SymbolTable)
   operation = operator_to_function[node.operator.class]
   left = evaluate(node.leftOperand, st)
   right = evaluate(node.rightOperand, st)
+  if (operation == (÷) && right.value == 0)
+    throw(ExecutionException("Divide by zero", node.line))
+  end
   return operation(left, right)
 end
 
@@ -104,7 +98,7 @@ end
 function executeStatement(r::Read, st::SymbolTable)
   varName = r.variable.lexeme
   type = getValue(st, varName).type
-  println("\n<MiniPL is waiting for input>")
+  println("\n<MiniPL-Julia is waiting for input>")
   rawInput = split(readline())[1]
   if type == MInt
     addOrUpdateSymbol(st, varName, SValue(MInt, parse(Int, rawInput)))

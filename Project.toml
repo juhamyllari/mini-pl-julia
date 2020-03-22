@@ -1,6 +1,6 @@
 name = "MiniPL"
 uuid = "f1547c5b-f130-4a18-a8e9-547d91318662"
-authors = ["Juha Myllari <jmyllari@gmail.com>"]
+authors = ["Juha Myllari"]
 version = "0.1.0"
 
 [compat]

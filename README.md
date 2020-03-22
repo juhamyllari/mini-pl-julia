@@ -7,7 +7,7 @@ To interpret a Mini-PL program, go to the project root directory and run
 `julia run.jl <Mini-PL program source code file path>`
 
 ## Documentation
-For a description of the project see the `/doc` directory.
+For a description of the project see the `/docs` directory.
 
 ## Example programs
 There are several example programs (in Mini-PL) in the `sample_programs` directory.

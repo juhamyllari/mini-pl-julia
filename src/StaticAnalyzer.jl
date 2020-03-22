@@ -79,6 +79,12 @@ binary_result_types = Dict(
   (MString, +) => MString,
 )
 
+"""
+A SymbolTable contains a Dict where the keys are variable names and
+the values are (<variable value>, <variable value is locked>) pairs.
+Iteration variables are locked during the execution of the for loop;
+all other variables are unlocked.
+"""
 mutable struct SymbolTable
   table::Dict{String,Tuple{SValue, Bool}}
 end
@@ -88,7 +94,8 @@ SymbolTable() = SymbolTable(Dict{String,Tuple{SValue, Bool}}())
 function addOrUpdateSymbol(st::SymbolTable, symbol::String, sv::SValue, line=0::Int)
   if hasSymbol(st, symbol) && st.table[symbol][2]
     throw(StaticAnalysisException(
-      "Attempting to update iteration variable $(symbol) on line $(line)."))
+      "Attempting to update iteration variable $(symbol) on line $(line)."
+    ))
   end
   push!(st.table, symbol => (sv, false))
 end
@@ -105,11 +112,13 @@ function setIterationVariable(st::SymbolTable, symbol::String, value::Int)
   push!(st.table, symbol => (SValue(MInt, value), true))
 end
 
-function  releaseIterationVariable(st::SymbolTable, symbol::String)
+# Unlock an iteration variable upon for loop completion.
+function releaseIterationVariable(st::SymbolTable, symbol::String)
   value = st.table[symbol][1]
   push!(st.table, symbol => (value, false))
 end
 
+# The entry point for the static analyzer.
 function staticAnalysis(AST::Statements)
   st = SymbolTable()
   for stmt in AST.statements
@@ -121,7 +130,8 @@ function staticAnalysis(r::Read, st::SymbolTable)
   varName = r.variable.lexeme
   if !hasSymbol(st, varName)
     throw(StaticAnalysisException(
-      "Attempting to read into an unassigned variable on line $(r.line)."))
+      "Attempting to read into an unassigned variable on line $(r.line)."
+    ))
   end
 end
 
@@ -135,7 +145,8 @@ function staticAnalysis(d::Declaration, st::SymbolTable)
   varName = d.variable.lexeme
   if hasSymbol(st, varName)
     throw(StaticAnalysisException(
-      "Attempting to declare existing variable $(varName) on line $(d.line)."))
+      "Attempting to declare existing variable $(varName) on line $(d.line)."
+    ))
   else
     addOrUpdateSymbol(st, varName, SValue(d.type.class), d.line)
   end
@@ -145,7 +156,8 @@ function staticAnalysis(d::DecAssignment, st::SymbolTable)
   varName = d.variable.lexeme
   if hasSymbol(st, varName)
     throw(StaticAnalysisException(
-      "Attempting to declare existing variable $(varName) on line $(d.line)."))
+      "Attempting to declare existing variable $(varName) on line $(d.line)."
+    ))
   else
     addOrUpdateSymbol(st, varName, SValue(typeCheck(d.value, st)), d.line)
   end
@@ -223,7 +235,8 @@ function typeCheck(b::BinaryOperation, st::SymbolTable)
     return binary_result_types[(leftType, operatorFunction)]
   else
     throw(StaticAnalysisException(
-      "Operator '$(b.operator.lexeme)' on line $(b.line) is not valid for provided argument types."))
+      "Operator '$(b.operator.lexeme)' on line $(b.line) is not valid for provided argument types."
+    ))
   end
 end
 

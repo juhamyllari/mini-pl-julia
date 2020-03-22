@@ -89,6 +89,12 @@ end
 
 Token(class::TokenClass, lexeme::String) = Token(class, lexeme, 0)
 
+"""
+The main function of the scanner. The "next" index points at the
+character to scan next. The outer while loop skips whitespace, keeps
+track of the line number and the comment nesting level, calls the
+getToken function, stores the resulting tokens and increments the index.
+"""
 function scanInput(input::AbstractString, next = 1)
   input *= end_of_input_symbol
   tokens = Array{Token,1}()
@@ -124,6 +130,10 @@ function scanInput(input::AbstractString, next = 1)
   return tokens
 end
 
+"""
+Looks at the first character of a potential lexeme and
+calls the corresponding function to produce a token.
+"""
 function getToken(input, next, lineNumber)
   c = input[next]
   if c ∈ ident_or_kw_initial

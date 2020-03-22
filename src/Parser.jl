@@ -88,8 +88,14 @@ struct LeftVal <: Node
   line::Int
 end
 
+"""
+The main function of the parser. Maintains an index ("next") to point
+at the token to be processed next. Builds the AST by calling mutually
+recursive parsing functions, starting with statements().
+"""
 function parseInput(input::Array{Token,1})
   
+  # Gets the next token.
   function nxtok()
     if next > length(input)
       throw(SyntaxException(
@@ -100,11 +106,15 @@ function parseInput(input::Array{Token,1})
 
   nxtclass() = nxtok().class
 
+  # Convenience function. Returns the token, its class and its line number.
   function tok_class_line()
     tok = nxtok()
     return tok, tok.class, tok.line
   end
 
+  """
+  Consumes the next token, checking that the token class matches.
+  """
   function match_term(terminal::TokenClass)
     DEBUG && println("match_term called in $(currentUnit) with terminal $(terminal), next is $(nxtclass())")
     token, class, line = tok_class_line()

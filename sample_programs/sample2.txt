@@ -1,4 +1,6 @@
-//  Demonstrate a failing assertion.
+/*  Demonstrate a failing assertion. In MiniPL-Julia,
+    the iteration variable is not incremented after
+    the last iteration of a for loop. */
 var nTimes : int := 0;
 print "How many times?";
 read nTimes;
@@ -7,4 +9,5 @@ for x in 0..nTimes-1 do
 print x;
 print " : Hello, World!\n";
 end for;
+print "The following assertion should fail:\n";
 assert (x = nTimes);

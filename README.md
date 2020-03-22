@@ -8,3 +8,6 @@ To interpret a Mini-PL program, go to the project root directory and run
 
 ## Documentation
 For a description of the project see the `/doc` directory.
+
+## Example programs
+There are several example programs (in Mini-PL) in the `sample_programs` directory.

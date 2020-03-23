@@ -9,3 +9,4 @@
 20.3. 2h  Error handling
 21.3. 2h  Error handling; Documentation
 22.3. 8h  Packaging; Testing; Documentation
+TOTAL 43h
